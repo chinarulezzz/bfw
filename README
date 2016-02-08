@@ -3,8 +3,9 @@
 ## Installation
 
 	make PREFIX=/usr install
-	# copy over examples from etc to /etc/bfw.allowed.conf and
-	# /etc/bfw.blocked.conf
+	# 1.) copy over examples from etc to /etc/bfw.allowed.conf and
+	#     /etc/bfw.blocked.conf
+	# 2.) edit /usr/bin/bfw to fit your interfaces	
 
 ## Links
 
