@@ -1,0 +1,143 @@
+#!/bin/sh
+#
+# Bridge Firewall to restrict a malicious device.
+#
+
+PATH=/sbin:/bin
+
+# Interfacd to the malicious device.
+INIF="in0"
+# Interface to the outside network.
+OUTIF="out0"
+
+BRIF="br0"
+LOCALIP="192.168.3.30"
+ALLOWEDHOSTS="/etc/bfw.allowed.conf"
+BLOCKEDHOSTS="/etc/bfw.blocked.conf"
+
+do_start() {
+	iptables -F FORWARD
+	iptables -P FORWARD DROP
+
+	# enable connection tracking
+	iptables -I FORWARD -s 0.0.0.0/0.0.0.0 \
+		-d 0.0.0.0/0.0.0.0 -m state --state INVALID -j DROP
+	iptables -I FORWARD -m state --state RELATED,ESTABLISHED \
+		-j ACCEPT
+
+	# fun
+	# iptables -A FORWARD -p icmp -m limit --limt 4/s -j ACCEPT
+	# iptables -I FORWARD -j DROP -p tcp -s 0.0.0.0/0 \
+	#	-m string --string "cmd.exe"
+
+	# allow ICMP
+	iptables -A FORWARD -p icmp -j ACCEPT
+
+	# allow DNS
+	iptables -A FORWARD -p udp --dport 53 -j ACCEPT
+
+	# allow local network
+	iptables -A FORWARD -s 192.168.0.0/255.255.0.0 \
+		-d 192.168.0.0/255.255.0.0 -j ACCEPT
+	
+	# blocked hosts
+	[ -e "$BLOCKEDHOSTS" ] && {
+		cat "$BLOCKEDHOSTS" \
+		| while read -r line;
+		do 
+			[ -z "$line" ] && continue
+
+			case "$line" in
+			\#*)
+				;;
+			*)
+				iptables -A FORWARD \
+					-s 192.168.0.0/255.255.0.0 \
+					-d $line \
+					-j LOG \
+					--log-prefix \
+					"FORWARD(${INIF}) rule blocked:"
+				iptables -A FORWARD \
+					-s 192.168.0.0/255.255.0.0 \
+					-d $line \
+					-j DROP 
+
+				iptables -A FORWARD \
+					-d 192.168.0.0/255.255.0.0 \
+					-s $line \
+					-j LOG \
+					--log-prefix \
+					"FORWARD(${INIF}) rule blocked:"
+				iptables -A FORWARD \
+					-d 192.168.0.0/255.255.0.0 \
+					-s $line \
+					-j DROP
+				;;
+			esac
+		done
+	}
+
+	# allowed hosts
+	[ -e "$ALLOWEDHOSTS" ] && {
+		cat "$ALLOWEDHOSTS" \
+		| while read -r line;
+		do 
+			[ -z "$line" ] && continue
+
+			case "$line" in
+			\#*)
+				;;
+			*)
+				iptables -A FORWARD \
+					-s 192.168.0.0/255.255.0.0 \
+					-d $line \
+					-j ACCEPT
+				iptables -A FORWARD \
+					-d 192.168.0.0/255.255.0.0 \
+					-s $line \
+					-j ACCEPT
+				;;
+			esac
+		done
+	}
+
+	# log all remaining rejects
+	iptables -A FORWARD -j LOG \
+		--log-prefix "FORWARD(${INIF}) blocked:"
+	# reject everything else coming from the malicious device
+	iptables -A FORWARD -j REJECT
+}
+
+do_unload() {
+	iptables -F FORWARD
+	iptables -P FORWARD ACCEPT
+}
+
+usage() {
+	printf "usage: %s [start|stop|reload]\n" "$(basename "$1")" >&2
+	exit 1
+}
+
+if [ $# -lt 1 ];
+then
+	usage $0
+fi
+
+cmd="$1"
+case "$cmd" in
+start)
+	do_start
+	;;
+reload|restart)
+	do_unload
+	do_start
+	;;
+stop)
+	do_unload
+	;;
+*)
+	usage $0
+	;;
+esac
+
+

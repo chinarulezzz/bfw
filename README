@@ -1,0 +1,21 @@
+# Bridge FireWall – bfw
+
+## Installation
+
+	make PREFIX=/usr install
+	# copy over examples from etc to /etc/bfw.allowed.conf and
+	# /etc/bfw.blocked.conf
+
+## Links
+
+	git://git.r-36.net/bfw
+	https://git.r-36.net/bfw
+
+## Bugs
+
+Send to:
+	Christoph Lohmann <20h@r-36.net>
+
+
+Have fun!
+
